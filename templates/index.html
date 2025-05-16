@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Ваш криптокошелек{% endblock %}
+
+{% block content %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="#">CryptoWallet</a>
+        <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+                <a class="nav-link active" href="#">Кошелек</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#ratesModal">Курсы</a>
+            </li>
+        </ul>
+        <div class="d-flex">
+            <span class="navbar-text me-3">{{ session['user_id'] }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Выйти</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container my-4">
+    <!-- ... (предыдущий код кошелька остается без изменений) ... -->
+</div>
+
+<!-- Модальное окно с курсами и графиками -->
+<div class="modal fade" id="ratesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Курсы криптовалют</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="cryptoTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="btc-tab" data-bs-toggle="tab"
+                                data-bs-target="#btc-tab-pane" type="button">
+                            Bitcoin (BTC)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="eth-tab" data-bs-toggle="tab"
+                                data-bs-target="#eth-tab-pane" type="button">
+                            Ethereum (ETH)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="usdt-tab" data-bs-toggle="tab"
+                                data-bs-target="#usdt-tab-pane" type="button">
+                            Tether (USDT)
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content p-3" id="cryptoTabsContent">
+                    <div class="tab-pane fade show active" id="btc-tab-pane" role="tabpanel">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h4>1 BTC = {{ rates.btc|round(2) }} USD</h4>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <div class="btn-group">
+                                    <button class="btn btn-outline-secondary time-btn active" data-days="1">24ч</button>
+                                    <button class="btn btn-outline-secondary time-btn" data-days="7">7д</button>
+                                    <button class="btn btn-outline-secondary time-btn" data-days="30">30д</button>
+                                    <button class="btn btn-outline-secondary time-btn" data-days="90">90д</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-container" style="height: 400px;">
+                            <canvas id="btcChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="eth-tab-pane" role="tabpanel">
+                        <!-- Аналогично для ETH -->
+                    </div>
+                    <div class="tab-pane fade" id="usdt-tab-pane" role="tabpanel">
+                        <!-- Аналогично для USDT -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Подключаем Chart.js для графиков -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Глобальные переменные для хранения графиков
+const charts = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация графиков при открытии модального окна
+    const ratesModal = document.getElementById('ratesModal');
+    ratesModal.addEventListener('shown.bs.modal', function() {
+        initChart('btc');
+    });
+
+    // Обработчики для вкладок
+    document.querySelectorAll('#cryptoTabs button').forEach(tab => {
+        tab.addEventListener('click', function() {
+            const cryptoId = this.id.split('-')[0];
+            initChart(cryptoId);
+        });
+    });
+
+    // Обработчики для кнопок временного периода
+    document.querySelectorAll('.time-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const days = this.dataset.days;
+            const activeTab = document.querySelector('#cryptoTabsContent .tab-pane.active');
+            const cryptoId = activeTab.id.split('-')[0];
+
+            loadChartData(cryptoId, days);
+        });
+    });
+});
+
+// Инициализация графика
+function initChart(cryptoId) {
+    const ctx = document.getElementById(`${cryptoId}Chart`).getContext('2d');
+
+    if (charts[cryptoId]) {
+        charts[cryptoId].destroy();
+    }
+
+    charts[cryptoId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [{
+            label: `Цена ${cryptoId.toUpperCase()}`,
+            data: [],
+            borderColor: '#4cc9f0',
+            tension: 0.1
+        }]},
+        options: {
+            responsive: true,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${cryptoId.toUpperCase()}: $${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    loadChartData(cryptoId, 30);
+}
+
+// Загрузка данных для графика
+function loadChartData(cryptoId, days) {
+    const coinId = {
+        'btc': 'bitcoin',
+        'eth': 'ethereum',
+        'usdt': 'tether'
+    }[cryptoId];
+
+    fetch(`/api/crypto_history?id=${coinId}&days=${days}`)
+        .then(response => response.json())
+        .then(data => {
+            const prices = data.prices;
+            const labels = prices.map(item => {
+                const date = new Date(item[0]);
+                return days <= 1
+                    ? date.toLocaleTimeString()
+                    : date.toLocaleDateString();
+            });
+
+            const chartData = prices.map(item => item[1]);
+
+            charts[cryptoId].data.labels = labels;
+            charts[cryptoId].data.datasets[0].data = chartData;
+            charts[cryptoId].update();
+        })
+        .catch(error => {
+            console.error('Error loading chart data:', error);
+        });
+}
+</script>
+{% endblock %}
